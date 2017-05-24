@@ -10,6 +10,7 @@ from .models import CourseOrg, CityDict,Teacher
 from .forms import UserAskForm
 from courses.models import Course
 from operation.models import UserFavorite
+from courses.models import Course
 
 
 class OrgView(View):
@@ -222,6 +223,62 @@ class AddFavView(View):
                 res['status'] = 'fail'
                 res['msg'] = '收藏出错'
         return HttpResponse(json.dumps(res), content_type='application/json')
+
+
+#  课程讲师列表页
+class TeacherView(View):
+    def get(self,request):
+        all_teachers = Teacher.objects.all()
+        sort = request.GET.get('sort','')
+        if sort:
+            if sort == 'hot':
+                all_teachers = all_teachers.order_by('-click_nums')
+
+        sorted_teacher = all_teachers.order_by('-click_nums')[:3]
+        #  总共多少个页面
+        teacher_count = all_teachers.count()
+        # 多课程机构进行分页
+        try:
+            page = request.GET.get('page', 1)
+        except PageNotAnInteger:
+            page = 1
+
+        # Provide Paginator with the request object for complete querystring generation
+        p = Paginator(all_teachers, 3, request=request)
+
+        teacherPages = p.page(page)
+
+        return  render(request, 'teachers-list.html',{
+            'all_teacher': teacherPages,
+            'sorted_teacher': sorted_teacher,
+            'sort':sort,
+            'teacher_count': teacher_count
+        })
+
+# 讲师详情页
+class TeacherDetailView(View):
+    def get(self, request, teacher_id):
+        teacher = Teacher.objects.get(id=int(teacher_id))
+        teacher.click_nums +=1
+        teacher.save()
+        all_courses = Course.objects.filter(teacher=teacher)
+
+        # 收藏
+        has_teacher_faved = False
+        if UserFavorite.objects.filter(user=request.user,fav_type=3,fav_id=teacher.id):
+            has_teacher_faved = True
+
+        has_org_faved = False
+        if UserFavorite.objects.filter(user=request.user, fav_type=2, fav_id=teacher.org.id):
+            has_org_faved = True
+        sorted_teacher = Teacher.objects.all().order_by('-click_nums')[:3]
+        return render(request, 'teacher-detail.html', {
+            'teacher': teacher,
+            'all_courses': all_courses,
+            'sorted_teacher':sorted_teacher,
+            'has_org_faved':has_org_faved,
+            'has_teacher_faved ':has_teacher_faved 
+        })
 
 
 
